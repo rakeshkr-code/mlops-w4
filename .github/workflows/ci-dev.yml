@@ -41,7 +41,8 @@ jobs:
       
       - name: Configure DVC
         run: |
-          dvc remote modify myremote credentialpath $GOOGLE_APPLICATION_CREDENTIALS
+          dvc remote add -d gcsremote gs://mlops-course-rapid-sphinx-473108-u4-rkm-w4
+          # dvc remote modify myremote credentialpath $GOOGLE_APPLICATION_CREDENTIALS
       
       - name: Pull data and model from DVC
         run: |
