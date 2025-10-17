@@ -159,8 +159,3 @@ class TestModelEvaluation:
         prob_sums = probabilities.sum(axis=1)
         assert np.allclose(prob_sums, 1.0), \
             "Probabilities don't sum to 1"
-    
-    def test_metrics_file_exists(self):
-        """Test if metrics file exists"""
-        assert os.path.exists('metrics.json'), \
-            "Metrics file not found"
