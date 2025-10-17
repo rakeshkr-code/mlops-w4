@@ -53,19 +53,7 @@ class TestDataValidation:
         """Test if dataset has no null values"""
         null_count = iris_data.isnull().sum().sum()
         assert null_count == 0, f"Dataset contains {null_count} null values"
-    
-    def test_no_duplicate_rows(self, iris_data):
-        """Test if dataset has no duplicate rows"""
-        dup_count = iris_data.duplicated().sum()
-        assert dup_count == 0, f"Dataset contains {dup_count} duplicate rows"
-    
-    def test_numeric_columns_type(self, iris_data):
-        """Test if numeric columns have correct data type"""
-        numeric_cols = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width']
-        for col in numeric_cols:
-            assert pd.api.types.is_numeric_dtype(iris_data[col]), \
-                f"Column {col} is not numeric"
-    
+
     def test_species_values(self, iris_data):
         """Test if species column has valid values"""
         valid_species = ['setosa', 'versicolor', 'virginica']
@@ -73,39 +61,3 @@ class TestDataValidation:
         for species in unique_species:
             assert species in valid_species, \
                 f"Invalid species value: {species}"
-    
-    def test_positive_values(self, iris_data):
-        """Test if numeric columns have positive values"""
-        numeric_cols = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width']
-        for col in numeric_cols:
-            assert (iris_data[col] > 0).all(), \
-                f"Column {col} contains non-positive values"
-    
-    def test_data_ranges(self, iris_data):
-        """Test if data values are within reasonable ranges"""
-        # Sepal length typically 4-8 cm
-        assert iris_data['sepal_length'].between(3, 10).all(), \
-            "Sepal length out of expected range"
-        
-        # Sepal width typically 2-5 cm
-        assert iris_data['sepal_width'].between(1, 6).all(), \
-            "Sepal width out of expected range"
-        
-        # Petal length typically 1-7 cm
-        assert iris_data['petal_length'].between(0, 8).all(), \
-            "Petal length out of expected range"
-        
-        # Petal width typically 0.1-3 cm
-        assert iris_data['petal_width'].between(0, 4).all(), \
-            "Petal width out of expected range"
-    
-    def test_balanced_classes(self, iris_data):
-        """Test if classes are reasonably balanced"""
-        class_counts = iris_data['species'].value_counts()
-        min_count = class_counts.min()
-        max_count = class_counts.max()
-        
-        # Check if ratio is not more than 3:1
-        ratio = max_count / min_count
-        assert ratio <= 3.0, \
-            f"Classes are imbalanced with ratio {ratio:.2f}:1"

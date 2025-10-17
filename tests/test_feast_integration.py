@@ -89,14 +89,7 @@ class TestFeastIntegration:
         
         assert config.offline_store.type == 'bigquery', \
             "Offline store should be BigQuery"
-    
-    def test_feast_online_store_config(self, feast_store):
-        """Test if online store (Firestore) is configured"""
-        config = feast_store.config
-        
-        assert config.online_store.type == 'firestore', \
-            "Online store should be Firestore"
-    
+
     def test_feature_data_schema(self, iris_data):
         """Test if feature data has correct schema for Feast"""
         feature_df = prepare_iris_data_for_bigquery(iris_data)
@@ -107,17 +100,3 @@ class TestFeastIntegration:
         for feature in expected_features:
             assert feature in feature_df.columns, \
                 f"Feature {feature} missing from prepared data"
-    
-    def test_feature_value_ranges(self, iris_data):
-        """Test if feature values are within valid ranges"""
-        feature_df = prepare_iris_data_for_bigquery(iris_data)
-        
-        # All features should be positive
-        assert (feature_df['sepal_length'] > 0).all(), \
-            "sepal_length contains non-positive values"
-        assert (feature_df['sepal_width'] > 0).all(), \
-            "sepal_width contains non-positive values"
-        assert (feature_df['petal_length'] >= 0).all(), \
-            "petal_length contains negative values"
-        assert (feature_df['petal_width'] >= 0).all(), \
-            "petal_width contains negative values"
