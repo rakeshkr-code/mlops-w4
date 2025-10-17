@@ -46,7 +46,7 @@ jobs:
       
       - name: Pull data and model from DVC
         run: |
-          dvc pull gcsremote
+          dvc pull
       
       - name: Run data validation tests
         run: |
