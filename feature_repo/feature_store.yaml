@@ -1,0 +1,12 @@
+project: iris_features
+registry: gs://$GCS_BUCKET_NAME/feast/registry.db
+provider: gcp
+online_store:
+  type: datastore
+  project_id: $GCP_PROJECT_ID
+  database: $GCP_PROJECT_ID
+offline_store:
+  type: bigquery
+  dataset: feast_iris_dataset
+  project_id: $GCP_PROJECT_ID
+entity_key_serialization_version: 2

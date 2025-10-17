@@ -1,0 +1,120 @@
+name: CI Pipeline - Dev Branch
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  test-and-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Configure DVC
+        run: |
+          dvc remote modify myremote credentialpath $GOOGLE_APPLICATION_CREDENTIALS
+      
+      - name: Pull data and model from DVC
+        run: |
+          dvc pull
+      
+      - name: Run data validation tests
+        run: |
+          pytest tests/test_data_validation.py -v --tb=short --junitxml=data_test_results.xml
+      
+      - name: Run model evaluation tests
+        run: |
+          pytest tests/test_model_evaluation.py -v --tb=short --junitxml=model_test_results.xml
+      
+      - name: Run Feast integration tests
+        run: |
+          pytest tests/test_feast_integration.py -v --tb=short --junitxml=feast_test_results.xml
+      
+      - name: Generate test coverage report
+        run: |
+          pytest tests/ --cov=src --cov-report=term --cov-report=html
+      
+      - name: Setup CML
+        uses: iterative/setup-cml@v2
+      
+      - name: Generate CML Report
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "# 🧪 Test Results Report - Dev Branch" > report.md
+          echo "" >> report.md
+          echo "## 📊 Test Summary" >> report.md
+          echo "" >> report.md
+          
+          # Count tests
+          DATA_TESTS=$(pytest tests/test_data_validation.py --collect-only -q 2>/dev/null | head -n 1 || echo "N/A")
+          MODEL_TESTS=$(pytest tests/test_model_evaluation.py --collect-only -q 2>/dev/null | head -n 1 || echo "N/A")
+          FEAST_TESTS=$(pytest tests/test_feast_integration.py --collect-only -q 2>/dev/null | head -n 1 || echo "N/A")
+          
+          echo "- **Data Validation Tests**: $DATA_TESTS" >> report.md
+          echo "- **Model Evaluation Tests**: $MODEL_TESTS" >> report.md
+          echo "- **Feast Integration Tests**: $FEAST_TESTS" >> report.md
+          echo "" >> report.md
+          
+          # Add test results
+          echo "## ✅ Data Validation Results" >> report.md
+          echo "\`\`\`" >> report.md
+          pytest tests/test_data_validation.py -v >> report.md 2>&1 || true
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+          
+          echo "## ✅ Model Evaluation Results" >> report.md
+          echo "\`\`\`" >> report.md
+          pytest tests/test_model_evaluation.py -v >> report.md 2>&1 || true
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+          
+          echo "## ✅ Feast Integration Results" >> report.md
+          echo "\`\`\`" >> report.md
+          pytest tests/test_feast_integration.py -v >> report.md 2>&1 || true
+          echo "\`\`\`" >> report.md
+          echo "" >> report.md
+          
+          # Add metrics if available
+          if [ -f "metrics.json" ]; then
+            echo "## 📈 Model Metrics" >> report.md
+            echo "\`\`\`json" >> report.md
+            cat metrics.json >> report.md
+            echo "\`\`\`" >> report.md
+          fi
+          
+          echo "" >> report.md
+          echo "---" >> report.md
+          echo "*✨ Powered by Feast Feature Store (BigQuery + Firestore)*" >> report.md
+          echo "*Generated on: $(date)*" >> report.md
+          
+          cml comment create report.md

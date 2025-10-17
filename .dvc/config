@@ -1,0 +1,4 @@
+[core]
+    remote = gcsremote
+['remote "gcsremote"']
+    url = gs://mlops-course-rapid-sphinx-473108-u4-rkm-w4/dvc-storage
