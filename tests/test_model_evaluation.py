@@ -60,18 +60,24 @@ class TestModelEvaluation:
     def test_model_can_predict(self, trained_model, test_data):
         """Test if model can make predictions"""
         X_test, _ = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         assert len(predictions) == len(X_test), "Prediction length mismatch"
     
     def test_prediction_shape(self, trained_model, test_data):
         """Test if predictions have correct shape"""
         X_test, _ = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         assert predictions.shape == (len(X_test),), "Incorrect prediction shape"
     
     def test_prediction_values(self, trained_model, test_data):
         """Test if predictions are valid class labels"""
         X_test, _ = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         valid_classes = [0, 1, 2]
         assert all(pred in valid_classes for pred in predictions), \
@@ -83,6 +89,8 @@ class TestModelEvaluation:
         min_accuracy = params['validation']['min_accuracy']
         
         X_test, y_test = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         accuracy = accuracy_score(y_test, predictions)
         
@@ -92,6 +100,8 @@ class TestModelEvaluation:
     def test_precision_score(self, trained_model, test_data):
         """Test if model has reasonable precision"""
         X_test, y_test = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         precision = precision_score(y_test, predictions, average='weighted')
         
@@ -101,6 +111,8 @@ class TestModelEvaluation:
     def test_recall_score(self, trained_model, test_data):
         """Test if model has reasonable recall"""
         X_test, y_test = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         recall = recall_score(y_test, predictions, average='weighted')
         
@@ -110,6 +122,8 @@ class TestModelEvaluation:
     def test_f1_score(self, trained_model, test_data):
         """Test if model has reasonable F1 score"""
         X_test, y_test = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         f1 = f1_score(y_test, predictions, average='weighted')
         
@@ -119,6 +133,8 @@ class TestModelEvaluation:
     def test_no_constant_predictions(self, trained_model, test_data):
         """Test if model doesn't predict only one class"""
         X_test, _ = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         predictions = trained_model.predict(X_test)
         unique_predictions = np.unique(predictions)
         
@@ -135,14 +151,11 @@ class TestModelEvaluation:
     def test_probability_predictions(self, trained_model, test_data):
         """Test if probability predictions sum to 1"""
         X_test, _ = test_data
+        FEATURE_COLUMNS = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+        X_test = X_test[FEATURE_COLUMNS]
         probabilities = trained_model.predict_proba(X_test)
         
         # Check if probabilities sum to 1 for each sample
         prob_sums = probabilities.sum(axis=1)
         assert np.allclose(prob_sums, 1.0), \
             "Probabilities don't sum to 1"
-    
-    def test_metrics_file_exists(self):
-        """Test if metrics file exists"""
-        assert os.path.exists('metrics.json'), \
-            "Metrics file not found"

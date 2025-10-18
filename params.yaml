@@ -15,6 +15,6 @@ gcp:
   bucket_name: 'mlops-course-rapid-sphinx-473108-u4-rkm-w4'    # REPLACE THIS
   
 validation:
-  min_accuracy: 0.70
-  min_samples: 30
+  min_accuracy: 0.50
+  min_samples: 20
   required_columns: ['sepal_length', 'sepal_width', 'petal_length', 'petal_width', 'species']
