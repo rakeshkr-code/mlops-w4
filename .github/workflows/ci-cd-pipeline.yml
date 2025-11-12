@@ -1,0 +1,171 @@
+name: CI/CD Pipeline for IRIS API on GKE
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: iris-cluster
+  GKE_ZONE: us-central1-a
+  DEPLOYMENT_NAME: iris-api
+  IMAGE_NAME: iris-api
+  REPOSITORY: iris-repo
+  REGION: us-central1
+
+jobs:
+  build-and-deploy:
+    name: Build, Push, and Deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker for Artifact Registry
+      run: |
+        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+                   ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+
+    - name: Push Docker image to Artifact Registry
+      run: |
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --zone ${{ env.GKE_ZONE }}
+
+    - name: Update deployment image
+      run: |
+        sed -i "s|REGION-docker.pkg.dev/PROJECT_ID|${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}|g" k8s/deployment.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl apply -f k8s/hpa.yaml
+
+    - name: Wait for deployment rollout
+      run: |
+        kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }}
+        kubectl get services -o wide
+
+  stress-test:
+    name: Stress Test with wrk
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} --zone ${{ env.GKE_ZONE }}
+
+    - name: Get LoadBalancer IP
+      id: get-ip
+      run: |
+        echo "Waiting for LoadBalancer IP..."
+        for i in {1..30}; do
+          EXTERNAL_IP=$(kubectl get service iris-api-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -n "$EXTERNAL_IP" ]; then
+            echo "SERVICE_IP=$EXTERNAL_IP" >> $GITHUB_OUTPUT
+            echo "LoadBalancer IP: $EXTERNAL_IP"
+            break
+          fi
+          echo "Waiting for IP assignment... (attempt $i/30)"
+          sleep 10
+        done
+
+    - name: Install wrk
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libssl-dev git
+        git clone https://github.com/wg/wrk.git
+        cd wrk
+        make
+        sudo cp wrk /usr/local/bin/
+
+    - name: Test 1 - Baseline with 1 pod and 1000 requests
+      run: |
+        echo "=== Test 1: 1000 concurrent connections with max 1 pod ==="
+        kubectl scale deployment iris-api --replicas=1
+        kubectl patch hpa iris-api-hpa -p '{"spec":{"maxReplicas":1}}'
+        sleep 30
+        
+        wrk -t10 -c1000 -d60s --latency \
+          -s - http://${{ steps.get-ip.outputs.SERVICE_IP }}/health <<EOF
+        wrk.method = "POST"
+        wrk.body   = '{"features": [5.1, 3.5, 1.4, 0.2]}'
+        wrk.headers["Content-Type"] = "application/json"
+        EOF
+        
+        kubectl get hpa
+        kubectl top pods
+
+    - name: Test 2 - Auto-scaling enabled with 1000 requests
+      run: |
+        echo "=== Test 2: 1000 concurrent connections with max 3 pods ==="
+        kubectl patch hpa iris-api-hpa -p '{"spec":{"maxReplicas":3}}'
+        sleep 30
+        
+        wrk -t10 -c1000 -d60s --latency \
+          -s - http://${{ steps.get-ip.outputs.SERVICE_IP }}/health <<EOF
+        wrk.method = "POST"
+        wrk.body   = '{"features": [5.1, 3.5, 1.4, 0.2]}'
+        wrk.headers["Content-Type"] = "application/json"
+        EOF
+        
+        echo "Observing auto-scaling..."
+        kubectl get hpa
+        kubectl get pods
+        kubectl top pods
+
+    - name: Test 3 - Increased load with 2000 requests (bottleneck demonstration)
+      run: |
+        echo "=== Test 3: 2000 concurrent connections with max 1 pod (bottleneck) ==="
+        kubectl scale deployment iris-api --replicas=1
+        kubectl patch hpa iris-api-hpa -p '{"spec":{"maxReplicas":1}}'
+        sleep 30
+        
+        wrk -t12 -c2000 -d60s --latency \
+          -s - http://${{ steps.get-ip.outputs.SERVICE_IP }}/health <<EOF
+        wrk.method = "POST"
+        wrk.body   = '{"features": [5.1, 3.5, 1.4, 0.2]}'
+        wrk.headers["Content-Type"] = "application/json"
+        EOF
+        
+        kubectl get hpa
+        kubectl top pods
+        echo "Notice increased latency and error rates due to single pod limitation"
+
+    - name: Final status report
+      run: |
+        echo "=== Final Deployment Status ==="
+        kubectl get pods
+        kubectl get hpa
+        kubectl describe hpa iris-api-hpa
